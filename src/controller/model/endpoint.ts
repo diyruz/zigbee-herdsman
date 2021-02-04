@@ -104,9 +104,21 @@ class Endpoint extends Entity {
     get configuredReportings(): ConfiguredReporting[] {
         return this._configuredReportings.map((entry) => {
             const cluster = Zcl.Utils.getCluster(entry.cluster);
+            let attribute : Zcl.TsType.Attribute;
+
+            if (cluster.hasAttribute(entry.attrId)) {
+                attribute = cluster.getAttribute(entry.attrId);
+            } else {
+                attribute = {
+                    ID: entry.attrId,
+                    name: undefined,
+                    type: undefined,
+                    manufacturerCode: undefined
+                };
+            }
+
             return {
-                cluster,
-                attribute: cluster.getAttribute(entry.attrId),
+                cluster, attribute,
                 minimumReportInterval: entry.minRepIntval,
                 maximumReportInterval: entry.maxRepIntval,
                 reportableChange: entry.repChange,
@@ -571,7 +583,7 @@ class Endpoint extends Entity {
         const frame = Zcl.ZclFrame.create(
             Zcl.FrameType.SPECIFIC, options.direction, options.disableDefaultResponse,
             options.manufacturerCode, options.transactionSequenceNumber ?? ZclTransactionSequenceNumber.next(),
-            command.ID, cluster.ID, payload, options.reservedBits
+            command.name, cluster.ID, payload, options.reservedBits
         );
 
         const log = `Command ${this.deviceIeeeAddress}/${this.ID} ` +
