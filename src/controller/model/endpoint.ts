@@ -30,6 +30,7 @@ interface Options {
     reservedBits?: number;
     transactionSequenceNumber?: number;
     disableRecovery?: boolean;
+    writeUndiv?: boolean;
 }
 
 interface Clusters {
@@ -271,8 +272,8 @@ class Endpoint extends Entity {
     public async write(
         clusterKey: number | string, attributes: KeyValue, options?: Options
     ): Promise<void> {
-        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.CLIENT_TO_SERVER);
         const cluster = Zcl.Utils.getCluster(clusterKey);
+        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.CLIENT_TO_SERVER, cluster.manufacturerCode);
         const payload: {attrId: number; dataType: number; attrData: number| string | boolean}[] = [];
         for (const [nameOrID, value] of Object.entries(attributes)) {
             if (cluster.hasAttribute(nameOrID)) {
@@ -293,7 +294,7 @@ class Endpoint extends Entity {
             const frame = Zcl.ZclFrame.create(
                 Zcl.FrameType.GLOBAL, options.direction, options.disableDefaultResponse,
                 options.manufacturerCode, options.transactionSequenceNumber ?? ZclTransactionSequenceNumber.next(),
-                'write', cluster.ID, payload, options.reservedBits
+                options.writeUndiv ? "writeUndiv" : "write", cluster.ID, payload, options.reservedBits
             );
             const result = await Entity.adapter.sendZclFrameToEndpoint(
                 this.deviceIeeeAddress, this.deviceNetworkAddress, this.ID, frame, options.timeout,
@@ -313,8 +314,8 @@ class Endpoint extends Entity {
     public async read(
         clusterKey: number | string, attributes: string[] | number [], options?: Options
     ): Promise<KeyValue> {
-        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.CLIENT_TO_SERVER);
         const cluster = Zcl.Utils.getCluster(clusterKey);
+        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.CLIENT_TO_SERVER, cluster.manufacturerCode);
         const payload: {attrId: number}[] = [];
         for (const attribute of attributes) {
             payload.push({attrId: typeof attribute === 'number' ? attribute : cluster.getAttribute(attribute).ID});
@@ -353,8 +354,8 @@ class Endpoint extends Entity {
         clusterKey: number | string, transactionSequenceNumber: number, attributes: KeyValue, options?: Options
     ): Promise<void> {
         assert(!options || !options.hasOwnProperty('transactionSequenceNumber'), 'Use parameter');
-        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.SERVER_TO_CLIENT);
         const cluster = Zcl.Utils.getCluster(clusterKey);
+        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.SERVER_TO_CLIENT, cluster.manufacturerCode);
         const payload: {attrId: number; status: number; dataType: number; attrData: number | string}[] = [];
         for (const [nameOrID, value] of Object.entries(attributes)) {
             if (cluster.hasAttribute(nameOrID)) {
@@ -476,7 +477,7 @@ class Endpoint extends Entity {
         commandID: number, status: number, clusterID: number, transactionSequenceNumber: number, options?: Options
     ): Promise<void> {
         assert(!options || !options.hasOwnProperty('transactionSequenceNumber'), 'Use parameter');
-        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.SERVER_TO_CLIENT);
+        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.SERVER_TO_CLIENT, null);
         const payload = {cmdId: commandID, statusCode: status};
         const frame = Zcl.ZclFrame.create(
             Zcl.FrameType.GLOBAL, options.direction, options.disableDefaultResponse,
@@ -502,8 +503,8 @@ class Endpoint extends Entity {
     public async configureReporting(
         clusterKey: number | string, items: ConfigureReportingItem[], options?: Options
     ): Promise<void> {
-        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.CLIENT_TO_SERVER);
         const cluster = Zcl.Utils.getCluster(clusterKey);
+        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.CLIENT_TO_SERVER, cluster.manufacturerCode);
         const payload = items.map((item): KeyValue => {
             let dataType, attrId;
 
@@ -578,7 +579,8 @@ class Endpoint extends Entity {
         const cluster = Zcl.Utils.getCluster(clusterKey);
         const command = cluster.getCommand(commandKey);
         const hasResponse = command.hasOwnProperty('response');
-        options = this.getOptionsWithDefaults(options, hasResponse, Zcl.Direction.CLIENT_TO_SERVER);
+        options = this.getOptionsWithDefaults(
+            options, hasResponse, Zcl.Direction.CLIENT_TO_SERVER, cluster.manufacturerCode);
 
         const frame = Zcl.ZclFrame.create(
             Zcl.FrameType.SPECIFIC, options.direction, options.disableDefaultResponse,
@@ -614,7 +616,7 @@ class Endpoint extends Entity {
         const cluster = Zcl.Utils.getCluster(clusterKey);
         const command = cluster.getCommandResponse(commandKey);
         transactionSequenceNumber = transactionSequenceNumber || ZclTransactionSequenceNumber.next();
-        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.SERVER_TO_CLIENT);
+        options = this.getOptionsWithDefaults(options, true, Zcl.Direction.SERVER_TO_CLIENT, cluster.manufacturerCode);
 
         const frame = Zcl.ZclFrame.create(
             Zcl.FrameType.SPECIFIC, options.direction, options.disableDefaultResponse,
@@ -658,7 +660,7 @@ class Endpoint extends Entity {
     }
 
     private getOptionsWithDefaults(
-        options: Options, disableDefaultResponse: boolean, direction: Zcl.Direction
+        options: Options, disableDefaultResponse: boolean, direction: Zcl.Direction, manufacturerCode: number,
     ): Options {
         const providedOptions = options || {};
         return {
@@ -669,8 +671,9 @@ class Endpoint extends Entity {
             direction,
             srcEndpoint: null,
             reservedBits: 0,
-            manufacturerCode: null,
+            manufacturerCode: manufacturerCode ? manufacturerCode : null,
             transactionSequenceNumber: null,
+            writeUndiv: false,
             ...providedOptions
         };
     }
