@@ -448,6 +448,11 @@ export class Driver extends EventEmitter {
         debug.log("Ezsp adding endpoint: %s", res);
     }
 
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any*/
+    public execCommand(name: string, ...args: any[]): any {
+        return this.ezsp.execCommand(name, ...args);
+    }
+
     public waitFor(address: number, clusterId: number, sequence: number, timeout = 30000)
         : { start: () => { promise: Promise<EmberFrame>; ID: number }; ID: number } {
         return this.waitress.waitFor({address, clusterId, sequence}, timeout);
