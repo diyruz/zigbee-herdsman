@@ -470,7 +470,24 @@ class EZSPAdapter extends Adapter {
         zclFrame: ZclFrame, timeout: number
     ): Promise<Events.ZclDataPayload> {
         // todo
-        throw new Error("not supported");
+        return this.driver.queue.execute<Events.ZclDataPayload>(async () => {
+            const command = zclFrame.getCommand();
+            if (!command.hasOwnProperty('response')) {
+                throw new Error(`Command '${command.name}' has no response, cannot wait for response`);
+            }
+            const respNum = 0x8007;
+            const response = this.waitForInternal(
+                null, null, zclFrame.Header.transactionSequenceNumber, zclFrame.Cluster.ID, respNum, timeout
+            );
+            try {
+                await this.driver.sendInterPan(zclFrame);
+            } catch (error) {
+                response.cancel();
+                throw error;
+            }
+
+            return response.start().promise;
+        });
     }
 
     public async sendZclFrameInterPANBroadcastWithResponse(

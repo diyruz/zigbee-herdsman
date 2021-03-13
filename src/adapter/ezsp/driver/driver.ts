@@ -20,6 +20,7 @@ import {Multicast} from './multicast';
 import {Queue, Waitress, Wait} from '../../../utils';
 import Debug from "debug";
 import equals from 'fast-deep-equal/es6';
+import {ZclFrame} from '../../../zcl';
 
 const debug = {
     error: Debug('zigbee-herdsman:adapter:driver:error'),
@@ -133,6 +134,9 @@ export class Driver extends EventEmitter {
         await this.addEndpoint({
             endpoint: 242, profileId: 0xA10E, deviceId: 0x61,
             outputClusters: [0x0021]
+        });
+        await this.addEndpoint({
+            endpoint: 12, profileId: 0xc05e
         });
 
         // getting MFG_STRING token
@@ -466,5 +470,28 @@ export class Driver extends EventEmitter {
         return (!matcher.address || payload.address === matcher.address) &&
             payload.frame.clusterId === matcher.clusterId &&
             payload.payload[0] === matcher.sequence;
+    }
+
+    public async sendInterPan(zclFrame: ZclFrame): Promise<void> {
+        // todo:
+        // EM_AF_PLUGIN_TEST_HARNESS_Z3_ZLL_CLIENT_TO_SERVER_FRAME_CONTROL =
+        // ZCL_CLUSTER_SPECIFIC_COMMAND | ZCL_FRAME_CONTROL_CLIENT_TO_SERVER 
+        // | ZCL_DISABLE_DEFAULT_RESPONSE_MASK
+        const frameControl = 0x01 | 0x0 | 0x10;
+        // ZCL_ZLL_COMMISSIONING_CLUSTER_ID
+        const clusterId = 0x1000;
+        // ZCL_RESET_TO_FACTORY_NEW_REQUEST_COMMAND_ID
+        const commandId = 0x0007;
+        // PANID
+        const panId = 0xFFFF;
+        // EMBER_NULL_NODE_ID
+        const nodeId = 0xFFFF;
+        const groupId = 0x0000;
+        // EMBER_ZLL_PROFILE_ID
+        const profileId = 0xC05E;
+
+        const seq = this.nextTransactionID();
+        const payload = [1,200,seq,255,255,255,255,165,22,48,117,65,254,255,35,164,96,11,0,11,0,16,94,192,17,74,0,96,115,203,68,2,146];
+        const res = await this.ezsp.execCommand('sendRawMessage', payload);
     }
 }
